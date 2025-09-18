@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ロードファイター風ゲーム iOS版 背景テーマ付き</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #222;
+    overflow: hidden;
+    touch-action: none;
+    font-family: "Press Start 2P", monospace;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+    background: #87CEEB;
+    touch-action: none;
+  }
+  #ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 14px;
+    background: rgba(0,0,0,0.5);
+    padding: 6px;
+    border-radius: 6px;
+    color: white;
+  }
+  #fuelBar {
+    width: 60%;
+    height: 12px;
+    background: #333;
+    margin: 5px auto;
+    border: 2px solid white;
+  }
+  #fuel {
+    height: 100%;
+    background: lime;
+    width: 100%;
+  }
+  #controller {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 60px;
+  }
+  .ctrl {
+    width: 90px;
+    height: 90px;
+    background: rgba(100,100,100,0.6);
+    border: 3px solid #222;
+    border-radius: 50%;
+    touch-action: manipulation;
+  }
+  #startMessage {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    font-size: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="480"></canvas>
+<div id="ui">
+  <div> SCORE: <span id="score">0</span></div>
+  <div> HIGH: <span id="highScore">0</span></div>
+  <div> STAGE: <span id="stage">1</span></div>
+  <div id="fuelBar"><div id="fuel"></div></div>
+</div>
+<div id="controller">
+  <div class="ctrl" id="btnLeft"></div>
+  <div class="ctrl" id="btnRight"></div>
+</div>
+<div id="startMessage">Tap to Start<br>音を有効化してください</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const highScoreEl = document.getElementById("highScore");
+const stageEl = document.getElementById("stage");
+const fuelEl = document.getElementById("fuel");
+const startMessage = document.getElementById("startMessage");
+
+const CONFIG = {
+  carSpeed: 3,
+  fuelDecrease: 0.03,
+  fuelGain: 20,
+  stageDistance: 2000,
+  stageIncrement: 500,
+  initialLives: 3,
+  carSize: {w:40, h:60},
+  fuelSize: {w:20, h:20},
+  finalStage: 5
+};
+
+// ステージ背景テーマ (森→砂漠→雪→夜→森)
+const stageThemes = [
+  {road:"#444", bg:"#228B22"},   // 森
+  {road:"#C2B280", bg:"#EDC9AF"}, // 砂漠
+  {road:"#DDD", bg:"#FFF"},     // 雪
+  {road:"#222", bg:"#000"},     // 夜
+  {road:"#444", bg:"#228B22"}   // 再び森
+];
+
+let leftPressed = false;
+let rightPressed = false;
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") leftPressed = true;
+  if (e.key === "ArrowRight") rightPressed = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft") leftPressed = false;
+  if (e.key === "ArrowRight") rightPressed = false;
+});
+document.getElementById("btnLeft").addEventListener("touchstart", ()=> leftPressed = true);
+document.getElementById("btnRight").addEventListener("touchstart", ()=> rightPressed = true);
+document.getElementById("btnLeft").addEventListener("touchend", ()=> leftPressed = false);
+document.getElementById("btnRight").addEventListener("touchend", ()=> rightPressed = false);
+
+class Car {
+  constructor(x,y){ this.x=x; this.y=y; this.w=CONFIG.carSize.w; this.h=CONFIG.carSize.h; this.invincible=false; }
+  update(){ if (leftPressed) this.x -= CONFIG.carSpeed; if (rightPressed) this.x += CONFIG.carSpeed; if (this.x<60) this.x=60; if (this.x+this.w>260) this.x=260-this.w; }
+  draw(){
+    ctx.fillStyle=this.invincible?(game.score%20<10?"rgba(255,0,0,0.5)":"red"):"red";
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+    ctx.fillStyle="skyblue"; ctx.fillRect(this.x+8,this.y+5,this.w-16,15);
+    ctx.fillStyle="black";
+    ctx.fillRect(this.x-6,this.y+5,6,15);
+    ctx.fillRect(this.x+this.w,this.y+5,6,15);
+    ctx.fillRect(this.x-6,this.y+this.h-20,6,15);
+    ctx.fillRect(this.x+this.w,this.y+this.h-20,6,15);
+  }
+  resetPosition(){ this.x=140; this.y=380; }
+}
+
+class Fuel {
+  constructor(x,y){ this.x=x; this.y=y; this.w=CONFIG.fuelSize.w; this.h=CONFIG.fuelSize.h; }
+  update(){ this.y+=game.speed; }
+  draw(){ ctx.fillStyle="lime"; ctx.fillRect(this.x,this.y,this.w,this.h); }
+}
+
+class Enemy {
+  constructor(x,y,type,speed,pattern="straight"){
+    this.type=type;
+    this.pattern=pattern;
+    if(type==="truck"){ this.w=60; this.h=100; this.color="gray"; this.speed=speed-1; }
+    else if(type==="fast"){ this.w=40; this.h=60; this.color="red"; this.speed=speed+2; }
+    else { this.w=40; this.h=60; this.color="blue"; this.speed=speed; }
+    this.x=x; this.y=y;
+    this.dir=1;
+    this.counter=0;
+  }
+  update(){
+    this.y += this.speed;
+    if(this.pattern==="zigzag"){
+      this.x += Math.sin(this.y/30) * 2;
+    } else if(this.pattern==="swerve"){
+      this.counter++;
+      if(this.counter%60===0) this.dir*=-1;
+      this.x += this.dir*2;
+      if(this.x<60) this.x=60;
+      if(this.x+this.w>260) this.x=260-this.w;
+    }
+  }
+  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); }
+}
+
+class Game {
+  constructor(){ this.highScore=parseInt(localStorage.getItem("highScore")||"0",10); this.reset(); }
+  reset(){
+    this.car=new Car(140,380);this.fuels=[];this.enemies=[];
+    this.score=0;this.fuel=100;this.speed=3;this.stage=1;this.distance=0;this.goalDistance=CONFIG.stageDistance;this.lives=CONFIG.initialLives;this.roadOffset=0;
+    this.lastScore=-1;this.lastStage=-1;this.lastFuel=-1;
+    this.gameOver=false;this.ending=false;
+    highScoreEl.textContent=this.highScore;
+  }
+  start(){ startMessage.style.display="none"; this.update(); }
+  drawRoad(){
+    this.roadOffset+=this.speed;
+    let theme=stageThemes[(this.stage-1)%stageThemes.length];
+    ctx.fillStyle=theme.bg;ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=theme.road;ctx.fillRect(60,0,200,canvas.height);
+    ctx.strokeStyle="white";
+    ctx.lineWidth=4;
+    ctx.setLineDash([20,20]);
+    ctx.beginPath();
+    ctx.moveTo(160,(this.roadOffset%40)-40);
+    ctx.lineTo(160,canvas.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  update(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(this.ending){
+      ctx.fillStyle="black"; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle="white"; ctx.font="18px monospace";
+      ctx.fillText("CONGRATULATIONS!!",40,200);
+      ctx.fillText("THE END",110,240);
+      ctx.font="14px monospace";
+      ctx.fillText("Tap to Restart",80,280);
+      requestAnimationFrame(()=>this.update());
+      return;
+    }
+
+    if(this.gameOver){
+      ctx.fillStyle="black"; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle="white";ctx.font="20px monospace";ctx.fillText("GAME OVER",80,220);
+      ctx.font="14px monospace";ctx.fillText("Tap to Restart",90,260);
+      requestAnimationFrame(()=>this.update());
+      return;
+    }
+
+    this.drawRoad();this.car.update();this.car.draw();
+
+    // === 敵の出現調整 ===
+    const MAX_ENEMIES = 5; // 同時最大数
+    if (this.enemies.length < MAX_ENEMIES) {
+      if (Math.random() < 0.015) { // 出現率を下げた
+        let lane=[70,120,170,220][Math.floor(Math.random()*4)];
+        let types=["normal","fast","truck"];
+        let t=types[Math.floor(Math.random()*types.length)];
+
+        // トラックは連続で出さない
+        if (t==="truck" && this.enemies.some(e=>e.type==="truck")) {
+          t="normal";
+        }
+
+        let p="straight";
+        if(this.stage===1){
+          p="straight";
+        } else if(this.stage===2 || this.stage===3){
+          p = Math.random()<0.7 ? "straight" : "zigzag";
+        } else if(this.stage>=4){
+          let r=Math.random();
+          if(r<0.4) p="zigzag";
+          else if(r<0.8) p="swerve";
+          else p="straight";
+        }
+        this.enemies.push(new Enemy(lane,-100,t,this.speed,p));
+      }
+    }
+
+    if(Math.random()<0.01){
+      let lane=[80,140,200][Math.floor(Math.random()*3)];
+      this.fuels.push(new Fuel(lane,-20));
+    }
+
+    this.fuels.forEach(f=>f.update());
+    this.enemies.forEach(e=>e.update());
+
+    this.fuels=this.fuels.filter(f=>f.y<canvas.height);
+    this.enemies=this.enemies.filter(e=>e.y<canvas.height);
+
+    this.fuels.forEach(f=>f.draw());
+    this.enemies.forEach(e=>e.draw());
+
+    for(let f of this.fuels){ 
+      if(this.checkCollision(this.car,f)){ 
+        this.fuel=Math.min(100,this.fuel+CONFIG.fuelGain); 
+        this.fuels=this.fuels.filter(x=>x!==f); 
+      } 
+    }
+    for(let e of this.enemies){ 
+      if(this.checkCollision(this.car,e)&&!this.car.invincible){ 
+        this.loseLife(); 
+        this.enemies=this.enemies.filter(x=>x!==e); 
+      } 
+    }
+
+    this.score++;this.distance++;
+    this.fuel -= CONFIG.fuelDecrease*(1+0.2*(this.stage-1));
+    if(this.fuel<=0)this.loseLife();
+
+    if(this.distance>this.goalDistance){
+      if(this.stage===CONFIG.finalStage){
+        this.ending=true;
+        if(this.score>this.highScore){ this.highScore=this.score; localStorage.setItem("highScore",this.highScore); }
+        return;
+      }
+      this.stage++;this.distance=0;this.goalDistance+=CONFIG.stageIncrement;this.speed+=0.5;this.fuels=[];this.enemies=[];
+    }
+
+    this.updateUI();requestAnimationFrame(()=>this.update());
+  }
+  updateUI(){
+    if(this.score!==this.lastScore){scoreEl.textContent=this.score;this.lastScore=this.score;}
+    if(this.stage!==this.lastStage){stageEl.textContent=this.stage;this.lastStage=this.stage;}
+    if(Math.floor(this.fuel)!==this.lastFuel){fuelEl.style.width=this.fuel*2+"px";this.lastFuel=Math.floor(this.fuel);}
+  }
+  checkCollision(a,b){const margin=5;return(a.x+margin<a.w+b.x&&a.x+a.w-margin>b.x&&a.y+margin<a.h+b.y&&a.y+a.h-margin>b.y);}
+  loseLife(){
+    this.lives--;
+    if(this.lives<=0){
+      this.gameOver=true;
+      if(this.score>this.highScore){this.highScore=this.score;localStorage.setItem("highScore",this.highScore);}
+      return;
+    }
+    this.car.invincible=true;setTimeout(()=>this.car.invincible=false,2000);this.car.resetPosition();
+  }
+}
+
+let game=new Game();
+
+const bgm = new Audio("tobu.mp3");
+bgm.loop = true;
+startMessage.addEventListener("click",()=>{
+  bgm.play();
+  if(game.gameOver||game.ending){game=new Game();game.start();}
+  else{game.start();}
+});
+
+function resizeCanvas(){
+  const aspect=320/480;
+  let w=window.innerWidth;
+  let h=window.innerHeight;
+  if(w/h>aspect){ w=h*aspect; } else { h=w/aspect; }
+  canvas.style.width=w+"px";
+  canvas.style.height=h+"px";
+}
+window.addEventListener("resize",resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>

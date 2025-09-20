@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>ロードファイター風ゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="game" width="320" height="480"></canvas>
+    
+    <!-- ゲーム情報表示 -->
+    <div id="ui">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>HIGH: <span id="highScore">0</span></div>
+        <div>STAGE: <span id="stage">1</span></div>
+        <div id="fuelBar">
+            <div id="fuel"></div>
+        </div>
+    </div>
+    
+    <!-- スマホ用コントローラー -->
+    <div id="controller">
+        <div class="ctrl" id="btnLeft">←</div>
+        <div class="ctrl" id="btnRight">→</div>
+    </div>
+    
+    <!-- スタートメッセージ -->
+    <div id="startMessage">
+        <h2>🏁 ロードファイター風ゲーム 🏁</h2>
+        <p>🎵 タップして音楽付きでスタート！</p>
+        <p>🚗 車を避けてゴールを目指そう</p>
+        <p>⛽ 燃料を集めて走り続けよう</p>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

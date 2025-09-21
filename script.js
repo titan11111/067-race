@@ -6,6 +6,8 @@ const highScoreEl = document.getElementById("highScore");
 const stageEl = document.getElementById("stage");
 const fuelEl = document.getElementById("fuel");
 const startMessage = document.getElementById("startMessage");
+const missileStatusEl = document.getElementById("missile");
+const missileButton = document.getElementById("btnMissile");
 
 // ゲームの基本設定
 const CONFIG = {
@@ -37,11 +39,20 @@ let rightPressed = false;
 document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") leftPressed = true;
     if (e.key === "ArrowRight") rightPressed = true;
+    if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        if (game && typeof game.fireMissile === "function") {
+            game.fireMissile();
+        }
+    }
 });
 
 document.addEventListener("keyup", (e) => {
     if (e.key === "ArrowLeft") leftPressed = false;
     if (e.key === "ArrowRight") rightPressed = false;
+    if (e.code === "Space") {
+        e.preventDefault();
+    }
 });
 
 // タッチ操作（スマホ用）
@@ -64,6 +75,22 @@ document.getElementById("btnRight").addEventListener("touchend", (e) => {
     e.preventDefault();
     rightPressed = false;
 });
+
+if (missileButton) {
+    missileButton.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        if (game && typeof game.fireMissile === "function") {
+            game.fireMissile();
+        }
+    });
+
+    missileButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (game && typeof game.fireMissile === "function") {
+            game.fireMissile();
+        }
+    });
+}
 
 // プレイヤーの車クラス
 class Car {
@@ -201,6 +228,73 @@ class Enemy {
     }
 }
 
+// ミサイルクラス
+class Missile {
+    constructor(x, y) {
+        this.w = 8;
+        this.h = 24;
+        this.x = x - this.w / 2;
+        this.y = y - this.h;
+        this.speed = 9;
+    }
+
+    update() {
+        this.y -= this.speed;
+    }
+
+    draw() {
+        ctx.fillStyle = "#FFD700";
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+
+        ctx.fillStyle = "#FF4500";
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y + this.h);
+        ctx.lineTo(this.x + this.w / 2, this.y + this.h + 8);
+        ctx.lineTo(this.x + this.w, this.y + this.h);
+        ctx.closePath();
+        ctx.fill();
+    }
+}
+
+// 爆発エフェクト
+class Explosion {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 10;
+        this.life = 18;
+    }
+
+    update() {
+        this.radius += 2;
+        this.life--;
+    }
+
+    draw() {
+        const alpha = Math.max(this.life / 18, 0);
+        const gradient = ctx.createRadialGradient(
+            this.x,
+            this.y,
+            this.radius * 0.2,
+            this.x,
+            this.y,
+            this.radius
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 200, ${alpha})`);
+        gradient.addColorStop(0.5, `rgba(255, 160, 0, ${alpha * 0.7})`);
+        gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    isAlive() {
+        return this.life > 0;
+    }
+}
+
 // ゲームメインクラス
 class Game {
     constructor() {
@@ -212,6 +306,7 @@ class Game {
         this.car = new Car(140, 380);
         this.fuels = [];
         this.enemies = [];
+        this.explosions = [];
         this.score = 0;
         this.fuel = 100;
         this.speed = 3;
@@ -222,17 +317,27 @@ class Game {
         this.roadOffset = 0;
         this.gameOver = false;
         this.ending = false;
-        
+        this.running = false;
+        this.missile = null;
+        this.missileAvailable = true;
+
         // UI更新用
         this.lastScore = -1;
         this.lastStage = -1;
         this.lastFuel = -1;
-        
+        this.lastMissileStatus = null;
+
+        if (missileStatusEl) {
+            missileStatusEl.textContent = "READY";
+            missileStatusEl.dataset.state = "ready";
+        }
+
         highScoreEl.textContent = this.highScore;
     }
 
     start() {
         startMessage.style.display = "none";
+        this.running = true;
         this.update();
     }
 
@@ -299,6 +404,13 @@ class Game {
         this.car.update();
         this.car.draw();
 
+        if (this.missile) {
+            this.missile.update();
+            if (this.missile.y + this.missile.h < 0) {
+                this.missile = null;
+            }
+        }
+
         // 敵の出現
         const MAX_ENEMIES = 5;
         if (this.enemies.length < MAX_ENEMIES) {
@@ -334,6 +446,16 @@ class Game {
         this.fuels.forEach(f => f.update());
         this.enemies.forEach(e => e.update());
 
+        if (this.missile) {
+            const hitEnemy = this.enemies.find(enemy => this.checkCollision(this.missile, enemy, 0));
+            if (hitEnemy) {
+                this.explosions.push(new Explosion(hitEnemy.x + hitEnemy.w / 2, hitEnemy.y + hitEnemy.h / 2));
+                this.enemies = this.enemies.filter(e => e !== hitEnemy);
+                this.missile = null;
+                soundSystem.playMissileExplosion();
+            }
+        }
+
         // 画面外のオブジェクトを削除
         this.fuels = this.fuels.filter(f => f.y < canvas.height);
         this.enemies = this.enemies.filter(e => e.y < canvas.height);
@@ -341,6 +463,18 @@ class Game {
         // 描画
         this.fuels.forEach(f => f.draw());
         this.enemies.forEach(e => e.draw());
+
+        if (this.missile) {
+            this.missile.draw();
+        }
+
+        if (this.explosions.length) {
+            this.explosions.forEach(explosion => {
+                explosion.update();
+                explosion.draw();
+            });
+            this.explosions = this.explosions.filter(explosion => explosion.isAlive());
+        }
 
         // 衝突判定
         for (let f of this.fuels) {
@@ -371,6 +505,8 @@ class Game {
         if (this.distance > this.goalDistance) {
             if (this.stage === CONFIG.finalStage) {
                 this.ending = true;
+                this.running = false;
+                this.missile = null;
                 if (this.score > this.highScore) {
                     this.highScore = this.score;
                     localStorage.setItem("highScore", this.highScore);
@@ -391,6 +527,10 @@ class Game {
         this.speed += 0.5;
         this.fuels = [];
         this.enemies = [];
+        this.explosions = [];
+        this.missile = null;
+        this.missileAvailable = true;
+        this.lastMissileStatus = null;
     }
 
     updateUI() {
@@ -406,10 +546,20 @@ class Game {
             fuelEl.style.width = Math.max(0, this.fuel) + "%";
             this.lastFuel = Math.floor(this.fuel);
         }
+        if (missileStatusEl) {
+            const missileState = this.missileAvailable
+                ? "ready"
+                : (this.missile ? "active" : "used");
+            if (missileState !== this.lastMissileStatus) {
+                const text = missileState === "ready" ? "READY" : missileState === "active" ? "LAUNCHED" : "USED";
+                missileStatusEl.textContent = text;
+                missileStatusEl.dataset.state = missileState;
+                this.lastMissileStatus = missileState;
+            }
+        }
     }
 
-    checkCollision(a, b) {
-        const margin = 5;
+    checkCollision(a, b, margin = 5) {
         return (a.x + margin < b.x + b.w &&
                 a.x + a.w - margin > b.x &&
                 a.y + margin < b.y + b.h &&
@@ -418,8 +568,12 @@ class Game {
 
     loseLife() {
         this.lives--;
+        if (this.missile) {
+            this.missile = null;
+        }
         if (this.lives <= 0) {
             this.gameOver = true;
+            this.running = false;
             if (this.score > this.highScore) {
                 this.highScore = this.score;
                 localStorage.setItem("highScore", this.highScore);
@@ -431,6 +585,17 @@ class Game {
         this.car.invincible = true;
         setTimeout(() => this.car.invincible = false, 2000);
         this.car.resetPosition();
+    }
+
+    fireMissile() {
+        if (!this.running || this.gameOver || this.ending) return;
+        if (!this.missileAvailable || this.missile) return;
+
+        const missileX = this.car.x + this.car.w / 2;
+        const missileY = this.car.y;
+        this.missile = new Missile(missileX, missileY);
+        this.missileAvailable = false;
+        soundSystem.playMissileLaunch();
     }
 }
 
@@ -607,7 +772,7 @@ class SoundSystem {
     // 燃料取得音
     playFuelSound() {
         if (!this.audioContext) return;
-        
+
         const fuel = this.audioContext.createOscillator();
         const fuelEnv = this.audioContext.createGain();
         
@@ -623,6 +788,62 @@ class SoundSystem {
         
         fuel.start(this.audioContext.currentTime);
         fuel.stop(this.audioContext.currentTime + 0.2);
+    }
+
+    // ミサイル発射音
+    playMissileLaunch() {
+        if (!this.audioContext) return;
+
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        const now = this.audioContext.currentTime;
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(700, now);
+        osc.frequency.exponentialRampToValueAtTime(1400, now + 0.12);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+        osc.start(now);
+        osc.stop(now + 0.2);
+    }
+
+    // ミサイル爆発音
+    playMissileExplosion() {
+        if (!this.audioContext) return;
+
+        const duration = 0.4;
+        const sampleRate = this.audioContext.sampleRate;
+        const bufferSize = sampleRate * duration;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+
+        const noise = this.audioContext.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(220, this.audioContext.currentTime);
+        filter.Q.setValueAtTime(1.2, this.audioContext.currentTime);
+
+        const gain = this.audioContext.createGain();
+        gain.gain.setValueAtTime(0.6, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        noise.start(this.audioContext.currentTime);
+        noise.stop(this.audioContext.currentTime + duration);
     }
 
     stop() {

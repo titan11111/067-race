@@ -57,7 +57,7 @@ canvas {
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 80px;
+    gap: 60px;
 }
 
 .ctrl {
@@ -80,6 +80,27 @@ canvas {
 .ctrl:active {
     background: rgba(150, 150, 150, 0.9);
     transform: scale(0.95);
+}
+
+.ctrl#btnMissile {
+    background: rgba(200, 70, 70, 0.85);
+    box-shadow: 0 0 10px rgba(255, 120, 0, 0.4);
+}
+
+.ctrl#btnMissile:active {
+    background: rgba(230, 90, 90, 0.9);
+}
+
+#missile[data-state="ready"] {
+    color: #7CFC00;
+}
+
+#missile[data-state="active"] {
+    color: #FFD700;
+}
+
+#missile[data-state="used"] {
+    color: #aaa;
 }
 
 /* スタートメッセージ */
@@ -120,15 +141,15 @@ canvas {
         width: 120px;
         height: 12px;
     }
-    
+
     .ctrl {
         width: 70px;
         height: 70px;
         font-size: 20px;
     }
-    
+
     #controller {
-        gap: 60px;
+        gap: 45px;
         bottom: 20px;
     }
     
@@ -155,9 +176,9 @@ canvas {
     
     #controller {
         bottom: 15px;
-        gap: 50px;
+        gap: 40px;
     }
-    
+
     .ctrl {
         width: 60px;
         height: 60px;

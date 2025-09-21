@@ -16,23 +16,26 @@
         <div>SCORE: <span id="score">0</span></div>
         <div>HIGH: <span id="highScore">0</span></div>
         <div>STAGE: <span id="stage">1</span></div>
+        <div>MISSILE: <span id="missile" data-state="ready">READY</span></div>
         <div id="fuelBar">
             <div id="fuel"></div>
         </div>
     </div>
-    
+
     <!-- スマホ用コントローラー -->
     <div id="controller">
         <div class="ctrl" id="btnLeft">←</div>
+        <div class="ctrl" id="btnMissile">🔥</div>
         <div class="ctrl" id="btnRight">→</div>
     </div>
-    
+
     <!-- スタートメッセージ -->
     <div id="startMessage">
         <h2>🏁 ロードファイター風ゲーム 🏁</h2>
         <p>🎵 タップして音楽付きでスタート！</p>
         <p>🚗 車を避けてゴールを目指そう</p>
         <p>⛽ 燃料を集めて走り続けよう</p>
+        <p>🔥 スペースキー/ミサイルボタンで敵を爆破！（各ステージ1発）</p>
     </div>
     
     <script src="script.js"></script>

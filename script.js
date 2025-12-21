@@ -857,19 +857,49 @@ const soundSystem = new SoundSystem();
 // ゲーム開始
 let game = new Game();
 
-// スタート画面のクリックイベント
-startMessage.addEventListener("click", async () => {
+// リスタート処理
+async function restartGame() {
     // 音声を初期化（ユーザー操作後でないと音声は再生できない）
     if (!soundSystem.audioContext) {
         await soundSystem.init();
         soundSystem.playBGM();
+    } else {
+        // 既に初期化済みの場合はBGMを再開
+        if (!soundSystem.isPlaying) {
+            soundSystem.playBGM();
+        }
     }
     
+    game = new Game();
+    game.start();
+}
+
+// スタート画面のクリックイベント
+startMessage.addEventListener("click", async () => {
     if (game.gameOver || game.ending) {
-        game = new Game();
-        game.start();
+        await restartGame();
     } else {
+        // 音声を初期化（ユーザー操作後でないと音声は再生できない）
+        if (!soundSystem.audioContext) {
+            await soundSystem.init();
+            soundSystem.playBGM();
+        }
         game.start();
+    }
+});
+
+// ゲームオーバー/エンディング画面のクリック/タッチイベント（WEBとiOS両対応）
+canvas.addEventListener("click", async (e) => {
+    if (game.gameOver || game.ending) {
+        e.preventDefault();
+        await restartGame();
+    }
+});
+
+canvas.addEventListener("touchend", async (e) => {
+    if (game.gameOver || game.ending) {
+        e.preventDefault();
+        await restartGame();
     }
 });
 
